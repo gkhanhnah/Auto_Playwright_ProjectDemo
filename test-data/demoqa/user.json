@@ -1,0 +1,26 @@
+{
+    "validUser": {
+      "firstName": "John",
+      "lastName": "Doe",
+      "email": "john.doe@example.com",
+      "age": "30",
+      "salary": "100000",
+      "department": "IT"
+    },
+    "invalidUser": {
+      "firstName": "",
+      "lastName": "",
+      "email": "invalid-email",
+      "age": "-1",
+      "salary": "abc",
+      "department": ""
+    },
+    "editUser": {
+      "firstName": "Jane",
+      "lastName": "Doe",
+      "email": "jane.doe@example.com",
+      "age": "31",
+      "salary": "100001",
+      "department": "HR"
+    }
+  }
