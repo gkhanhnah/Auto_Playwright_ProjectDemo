@@ -1,0 +1,14 @@
+{
+    "validUser": {
+    "firstName": "Gia Khanh",
+    "lastName": "Nguyen",
+        "userName": "giakhanh",
+        "password": "123KhanH@2002"
+    },
+    "invalidUser": {
+        "firstName": "Gia Khanh",
+        "lastName": "Nguyen",
+        "userName": "giakhanh",
+        "password": "123456"
+    }
+  }
