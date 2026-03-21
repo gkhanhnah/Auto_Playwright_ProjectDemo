@@ -30,45 +30,43 @@ function parseHeaderMonthYear(text: string): { monthIndex: number; year: number 
     return { monthIndex, year };
 }
 
-function timeLabelToLooseRegex(timeLabel: string): RegExp {
+function timeLabelMatchCandidates(timeLabel: string): RegExp[] {
     const t = timeLabel.trim().replace(/\s+/g, ' ');
     const m = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (!m) {
-        return new RegExp(escapeRegex(t).replace(/\\\s+/g, '\\s+'), 'i');
+    const out: RegExp[] = [];
+
+    out.push(new RegExp(`^\\s*${escapeRegex(t)}\\s*$`, 'i'));
+
+    if (m) {
+        let h = Number(m[1]);
+        const min = m[2];
+        const ap = m[3].toUpperCase();
+        if (ap === 'PM' && h !== 12) {
+            h += 12;
+        }
+        if (ap === 'AM' && h === 12) {
+            h = 0;
+        }
+        const hh = h.toString().padStart(2, '0');
+        out.push(new RegExp(`^\\s*${hh}:${min}\\s*$`));
+        out.push(new RegExp(`^\\s*${h}:${min}\\s*$`));
     }
-    const hour = Number(m[1]);
-    const minRaw = m[2];
-    const ap = m[3].toUpperCase();
-    return new RegExp(
-        `\\b0*${hour}\\s*:\\s*${minRaw}\\s*${ap}\\b`,
-        'i',
-    );
+
+    return out;
 }
 
 export class DatePickerPage {
     constructor(private page: Page) { }
 
-    // ===== LOCATORS =====
-    datePicker = () =>
-        this.page.locator('#datePickerMonthYearInput');
-    dateAndTimePickerInput = () =>
-        this.page.locator('#dateAndTimePickerInput');
+    datePicker = () => this.page.locator('#datePickerMonthYearInput');
+    dateAndTimePickerInput = () => this.page.locator('#dateAndTimePickerInput');
 
-    private async visibleDateTimeCalendar(): Promise<Locator> {
-        const candidates = this.page.locator('.react-datepicker').filter({
-            has: this.page.locator('.react-datepicker__time-container'),
-        });
-        const n = await candidates.count();
-        for (let i = 0; i < n; i++) {
-            const cal = candidates.nth(i);
-            if (await cal.isVisible()) {
-                return cal;
-            }
-        }
-        throw new Error('No visible datetime react-datepicker (with time column) found');
+    private dateTimeCalendarPopup(): Locator {
+        return this.page
+            .locator('.react-datepicker:has(.react-datepicker__time-container)')
+            .last();
     }
 
-    // ===== ACTIONS =====
     async goto() {
         await this.page.goto('/date-picker');
     }
@@ -80,26 +78,22 @@ export class DatePickerPage {
         timeLabel: string;
     }) {
         const { year, monthIndex, day, timeLabel } = opts;
+        const monthName = MONTH_NAMES[monthIndex];
         const dayOrd = dayWithOrdinal(day);
-        const dayLocator = (await this.visibleDateTimeCalendar()).locator('.react-datepicker__day').filter({
-            hasText: new RegExp(`^${dayOrd}$`)
-        }).filter({
-            hasNot: (await this.visibleDateTimeCalendar()).locator('.react-datepicker__day--outside-month')
-        }).first();
-        await dayLocator.click();
 
         await this.dateAndTimePickerInput().click();
 
-        // Page has two pickers in DOM; the datetime one is usually last — don't wait on the first (often hidden).
-        await this.page.locator('.react-datepicker__time-container').last().waitFor({
-            state: 'visible',
-            timeout: 15_000,
-        });
+        const calendar = this.dateTimeCalendarPopup();
+        await calendar.waitFor({ state: 'visible', timeout: 15_000 });
 
-        const calendar = await this.visibleDateTimeCalendar();
-        await calendar.waitFor({ state: 'visible' });
         await this.navigateToMonth(calendar, year, monthIndex);
+
+        await calendar
+            .locator(`[aria-label*="${monthName} ${dayOrd}, ${year}"]`)
+            .click();
+
         await this.clickTimeListItem(calendar, timeLabel);
+
         await this.page.keyboard.press('Escape');
     }
 
@@ -119,28 +113,26 @@ export class DatePickerPage {
 
     private async clickTimeListItem(calendar: Locator, timeLabel: string) {
         const timeList = calendar.locator('.react-datepicker__time-list');
-        await timeList.waitFor({ state: 'visible' });
+        await timeList.waitFor({ state: 'visible', timeout: 15_000 });
 
         const items = timeList.locator('.react-datepicker__time-list-item');
-        const texts = await items.allTextContents();
+        const patterns = timeLabelMatchCandidates(timeLabel);
 
-        // normalize
-        const normalize = (t: string) => t.replace(/\s+/g, '').toLowerCase();
-
-        const target = normalize(timeLabel);
-
-        // tìm exact trước
-        let index = texts.findIndex(t => normalize(t) === target);
-
-        // nếu không có → lấy item gần nhất
-        if (index === -1) {
-            console.warn(`Time ${timeLabel} not found, picking closest...`);
-            index = 0; // hoặc logic chọn gần nhất
+        for (const re of patterns) {
+            const candidate = items.filter({ hasText: re });
+            if ((await candidate.count()) === 0) {
+                continue;
+            }
+            const item = candidate.first();
+            await item.scrollIntoViewIfNeeded();
+            await item.click();
+            return;
         }
 
-        const item = items.nth(index);
-        await item.scrollIntoViewIfNeeded();
-        await item.click();
+        throw new Error(
+            `No time list item matched "${timeLabel}" (tried 12h and 24h). ` +
+                `DemoQA uses 15‑minute steps and 24h labels like 15:30 — pick a slot that exists.`,
+        );
     }
 
     private async navigateToMonth(calendar: Locator, targetYear: number, targetMonthIndex: number) {
@@ -171,12 +163,10 @@ export class DatePickerPage {
         );
     }
 
-    /** Asserts the "Select Date" field (month/year input) value. */
     async expectDateSelected(expected: string | RegExp) {
         await expect(this.datePicker()).toHaveValue(expected);
     }
 
-    /** Asserts the "Date And Time" field value (format may vary by locale / widget). */
     async expectDateAndTimeSelected(expected: string | RegExp) {
         await expect(this.dateAndTimePickerInput()).toHaveValue(expected);
     }

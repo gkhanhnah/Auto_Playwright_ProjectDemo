@@ -1,0 +1,25 @@
+{
+  "dateOnly": {
+    "value": "01/15/2026"
+  },
+  "dateTimeJan1": {
+    "calendar": {
+      "year": 2026,
+      "monthIndex": 0,
+      "day": 1,
+      "timeLabel": "12:00 PM"
+    },
+    "expectedValueRegex": "01/01/2026\\s+12:00\\s*PM|January\\s+1,\\s+2026\\s+12:00\\s*PM"
+  },
+  "dateOnlyPlusDateTime": {
+    "dateOnlyValue": "03/20/2026",
+    "calendar": {
+      "year": 2026,
+      "monthIndex": 5,
+      "day": 1,
+      "timeLabel": "3:30 PM"
+    },
+    "expectedDateOnly": "03/20/2026",
+    "expectedDateTimeRegex": "06/01/2026\\s+3:30\\s*PM|June\\s+1,\\s+2026\\s+3:30\\s*PM"
+  }
+}

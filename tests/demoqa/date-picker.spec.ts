@@ -1,5 +1,23 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { test } from '@playwright/test';
 import { DatePickerPage } from '../../pages/demoqa/DatePicker';
+
+const datePickerData = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../../test-data/demoqa/date-picker.json'), 'utf-8'),
+) as {
+  dateOnly: { value: string };
+  dateTimeJan1: {
+    calendar: { year: number; monthIndex: number; day: number; timeLabel: string };
+    expectedValueRegex: string;
+  };
+  dateOnlyPlusDateTime: {
+    dateOnlyValue: string;
+    calendar: { year: number; monthIndex: number; day: number; timeLabel: string };
+    expectedDateOnly: string;
+    expectedDateTimeRegex: string;
+  };
+};
 
 test.describe('Date Picker - DemoQA', () => {
   test.beforeEach(async ({ page }) => {
@@ -9,43 +27,35 @@ test.describe('Date Picker - DemoQA', () => {
 
   test('Select date — fills date only input and value is shown', async ({ page }) => {
     const datePickerPage = new DatePickerPage(page);
-    const date = '01/15/2026';
+    const { value } = datePickerData.dateOnly;
 
-    await datePickerPage.selectDate(date);
-    await datePickerPage.expectDateSelected(date);
+    await datePickerPage.selectDate(value);
+    await datePickerPage.expectDateSelected(value);
   });
 
   test('Select date and time — pick via calendar (fill does not work on this widget)', async ({
     page,
   }) => {
     const datePickerPage = new DatePickerPage(page);
+    const { calendar, expectedValueRegex } = datePickerData.dateTimeJan1;
 
-    await datePickerPage.selectDateAndTimeFromCalendar({
-      year: 2026,
-      monthIndex: 0,
-      day: 1,
-      timeLabel: '12:00 PM',
-    });
-
-    await datePickerPage.expectDateAndTimeSelected(
-      /01\/01\/2026\s+12:00\s*PM|January\s+1,\s+2026\s+12:00\s*PM/i,
-    );
+    await datePickerPage.selectDateAndTimeFromCalendar(calendar);
+    await datePickerPage.expectDateAndTimeSelected(new RegExp(expectedValueRegex, 'i'));
   });
 
   test('Date only field does not change when setting date+time field', async ({ page }) => {
     const datePickerPage = new DatePickerPage(page);
-    await datePickerPage.selectDate('03/20/2026');
+    const {
+      dateOnlyValue,
+      calendar,
+      expectedDateOnly,
+      expectedDateTimeRegex,
+    } = datePickerData.dateOnlyPlusDateTime;
 
-    await datePickerPage.selectDateAndTimeFromCalendar({
-      year: 2026,
-      monthIndex: 5,
-      day: 1,
-      timeLabel: '3:30 PM',
-    });
+    await datePickerPage.selectDate(dateOnlyValue);
+    await datePickerPage.selectDateAndTimeFromCalendar(calendar);
 
-    await datePickerPage.expectDateSelected('03/20/2026');
-    await datePickerPage.expectDateAndTimeSelected(
-      /06\/01\/2026\s+3:30\s*PM|June\s+1,\s+2026\s+3:30\s*PM/i,
-    );
+    await datePickerPage.expectDateSelected(expectedDateOnly);
+    await datePickerPage.expectDateAndTimeSelected(new RegExp(expectedDateTimeRegex, 'i'));
   });
 });
